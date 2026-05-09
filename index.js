@@ -172,7 +172,7 @@ app.get("/check-subscription/:userId", async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 app.post("/send-notification", async (req, res) => {
     try {
-        const { title, message, target, specificUser } = req.body;
+        const { title, message, target, specificUser, link } = req.body;
         if (!title || !message) return res.status(400).json({ error: "title and message are required" });
 
         let tokens = [];
@@ -202,13 +202,20 @@ app.post("/send-notification", async (req, res) => {
 
         if (tokens.length === 0) return res.json({ success: true, sent: 0, message: "No devices with FCM token found. Users need to open the app first." });
 
+        // Build FCM message with optional link in data
+        const fcmMessage = {
+            notification: { title, body: message },
+            tokens: [],
+        };
+        if (link) {
+            fcmMessage.data = { link: link };
+        }
+
         let successCount = 0, failCount = 0;
         for (let i = 0; i < tokens.length; i += 500) {
             const batch = tokens.slice(i, i + 500);
-            const response = await admin.messaging().sendEachForMulticast({
-                notification: { title, body: message },
-                tokens: batch,
-            });
+            fcmMessage.tokens = batch;
+            const response = await admin.messaging().sendEachForMulticast(fcmMessage);
             successCount += response.successCount;
             failCount += response.failureCount;
         }
