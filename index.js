@@ -27,9 +27,9 @@ const REDIRECT_URL = process.env.REDIRECT_URL || "https://sensixpert-backend.onr
 // PLAN DEFINITIONS
 // ═══════════════════════════════════════════════════════════
 const PLANS = {
-    "7days": { price: 49, days: 7, name: "Basic (7 Days)" },
-    "monthly": { price: 169, days: 30, name: "Standard (1 Month)" },
-    "3months": { price: 399, days: 90, name: "Premium (3 Months)" },
+    "7days": { price: 49, days: 7, name: "7 Days" },
+    "monthly": { price: 169, days: 30, name: "1 Month" },
+    "3months": { price: 399, days: 90, name: "3 Months" },
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -65,7 +65,7 @@ app.post("/create-payment", async (req, res) => {
         const requestBody = {
             zap_key: ZAP_KEY.trim(), order_id: orderId,
             amount: planInfo.price.toString(), customer_mobile: phone,
-            remark: `SensiXpert ${planInfo.name} Subscription`,
+            remark: `SensiXpert ${planInfo.name} Plan`,
             success_url: REDIRECT_URL, failed_url: REDIRECT_URL,
         };
 
