@@ -205,7 +205,7 @@ app.post("/send-notification", async (req, res) => {
         const response = await axios.post("https://api.onesignal.com/notifications", payload, {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Key ${ONESIGNAL_API_KEY}`,
+                "Authorization": `Basic ${ONESIGNAL_API_KEY}`,
             },
         });
 
