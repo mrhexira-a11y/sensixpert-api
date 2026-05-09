@@ -168,60 +168,54 @@ app.get("/check-subscription/:userId", async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// POST /send-notification (OneSignal)
+// POST /send-notification (FCM)
 // ═══════════════════════════════════════════════════════════
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || "e83708b1-ef26-4755-9309-d5aeb64c734e";
-const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY || "os_v2_app_2vkd2hsksueofedhd76h2zxdc7hycwlkh7lqk5oxjmzprhvotjcylhpkrjfyqwqowv655lngd3wz74a4nqlwdtjw4a4yqdbcx4yq5q";
-
 app.post("/send-notification", async (req, res) => {
     try {
         const { title, message, target, specificUser } = req.body;
         if (!title || !message) return res.status(400).json({ error: "title and message are required" });
 
-        const payload = {
-            app_id: ONESIGNAL_APP_ID,
-            headings: { en: title },
-            contents: { en: message },
-        };
-
-        // Target selection
+        let tokens = [];
         if (target === "specific" && specificUser) {
-            // Send to specific user by external_user_id (Firebase UID)
-            payload.include_aliases = { external_id: [specificUser] };
-            payload.target_channel = "push";
-        } else if (target === "subscribers") {
-            // Send to subscribed users via tag filter
-            payload.filters = [{ field: "tag", key: "subscriber", relation: "=", value: "true" }];
-        } else if (target === "non_subscribers") {
-            // Send to non-subscribed users
-            payload.filters = [
-                { field: "tag", key: "subscriber", relation: "!=", value: "true" }
-            ];
+            let userDoc = await db.collection("users").doc(specificUser).get();
+            if (!userDoc.exists) {
+                const q = await db.collection("users").where("email", "==", specificUser).limit(1).get();
+                if (!q.empty) userDoc = q.docs[0];
+            }
+            if (userDoc && userDoc.exists) {
+                const token = userDoc.data().fcmToken;
+                if (token) tokens.push(token);
+            }
         } else {
-            // Send to all users
-            payload.included_segments = ["All"];
+            const usersSnap = await db.collection("users").get();
+            usersSnap.forEach(doc => {
+                const data = doc.data();
+                const token = data.fcmToken;
+                if (!token) return;
+                const sub = data.subscription || {};
+                const isActive = sub.status === "active" && sub.endDate > Date.now();
+                if (target === "subscribers" && isActive) tokens.push(token);
+                else if (target === "non_subscribers" && !isActive) tokens.push(token);
+                else if (target === "all") tokens.push(token);
+            });
         }
 
-        const response = await axios.post("https://api.onesignal.com/notifications", payload, {
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Basic ${ONESIGNAL_API_KEY}`,
-            },
-        });
+        if (tokens.length === 0) return res.json({ success: true, sent: 0, message: "No devices with FCM token found. Users need to open the app first." });
 
-        const data = response.data;
-        console.log("OneSignal response:", JSON.stringify(data));
-        return res.json({
-            success: true,
-            recipients: data.recipients || 0,
-            id: data.id,
-        });
+        let successCount = 0, failCount = 0;
+        for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            const response = await admin.messaging().sendEachForMulticast({
+                notification: { title, body: message },
+                tokens: batch,
+            });
+            successCount += response.successCount;
+            failCount += response.failureCount;
+        }
+        return res.json({ success: true, sent: successCount, failed: failCount, total: tokens.length });
     } catch (error) {
-        console.error("Send notification error:", error.response?.data || error.message);
-        return res.status(500).json({
-            error: error.response?.data?.errors?.[0] || error.message,
-            success: false,
-        });
+        console.error("Send notification error:", error.message);
+        return res.status(500).json({ error: error.message });
     }
 });
 
