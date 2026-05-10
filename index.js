@@ -71,15 +71,21 @@ app.post("/create-payment", async (req, res) => {
 
         const zapupiResponse = await axios.post(ZAPUPI_API_URL, requestBody);
         const paymentData = zapupiResponse.data;
+        console.log("ZapUPI response:", JSON.stringify(paymentData));
 
         if (paymentData && paymentData.payment_url) {
             return res.json({ success: true, paymentUrl: paymentData.payment_url, orderId });
         } else {
-            return res.status(500).json({ error: "Could not create payment" });
+            console.error("ZapUPI did not return payment_url:", JSON.stringify(paymentData));
+            return res.status(500).json({ error: "Could not create payment", details: paymentData });
         }
     } catch (error) {
         console.error("Create payment error:", error.message);
-        return res.status(500).json({ error: "Internal server error" });
+        if (error.response) {
+            console.error("ZapUPI error response:", error.response.status, JSON.stringify(error.response.data));
+            return res.status(500).json({ error: "Payment gateway error", status: error.response.status, details: error.response.data });
+        }
+        return res.status(500).json({ error: error.message });
     }
 });
 
