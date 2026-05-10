@@ -175,7 +175,8 @@ app.post("/send-notification", async (req, res) => {
         const { title, message, target, specificUser, link } = req.body;
         if (!title || !message) return res.status(400).json({ error: "title and message are required" });
 
-        let tokens = [];
+        // Use Set to prevent duplicate tokens (same device with multiple accounts)
+        const tokenSet = new Set();
         if (target === "specific" && specificUser) {
             let userDoc = await db.collection("users").doc(specificUser).get();
             if (!userDoc.exists) {
@@ -184,7 +185,7 @@ app.post("/send-notification", async (req, res) => {
             }
             if (userDoc && userDoc.exists) {
                 const token = userDoc.data().fcmToken;
-                if (token) tokens.push(token);
+                if (token) tokenSet.add(token);
             }
         } else {
             const usersSnap = await db.collection("users").get();
@@ -194,12 +195,13 @@ app.post("/send-notification", async (req, res) => {
                 if (!token) return;
                 const sub = data.subscription || {};
                 const isActive = sub.status === "active" && sub.endDate > Date.now();
-                if (target === "subscribers" && isActive) tokens.push(token);
-                else if (target === "non_subscribers" && !isActive) tokens.push(token);
-                else if (target === "all") tokens.push(token);
+                if (target === "subscribers" && isActive) tokenSet.add(token);
+                else if (target === "non_subscribers" && !isActive) tokenSet.add(token);
+                else if (target === "all") tokenSet.add(token);
             });
         }
 
+        const tokens = [...tokenSet];
         if (tokens.length === 0) return res.json({ success: true, sent: 0, message: "No devices with FCM token found. Users need to open the app first." });
 
         // Use DATA-ONLY message to prevent Android from auto-showing a duplicate notification.
