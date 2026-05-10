@@ -202,13 +202,14 @@ app.post("/send-notification", async (req, res) => {
 
         if (tokens.length === 0) return res.json({ success: true, sent: 0, message: "No devices with FCM token found. Users need to open the app first." });
 
-        // Build FCM message with optional link in data
+        // Use DATA-ONLY message to prevent Android from auto-showing a duplicate notification.
+        // FCMService.onMessageReceived will handle building and displaying the notification.
         const fcmMessage = {
-            notification: { title, body: message },
+            data: { title, body: message },
             tokens: [],
         };
         if (link) {
-            fcmMessage.data = { link: link };
+            fcmMessage.data.link = link;
         }
 
         let successCount = 0, failCount = 0;
