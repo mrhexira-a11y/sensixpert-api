@@ -54,7 +54,7 @@ app.post("/create-payment", async (req, res) => {
         if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
 
         const userData = userDoc.data();
-        const phone = userData.phone || "0000000000";
+        const phone = userData.phone || "9999999999";
         const orderId = `SX_${userId.substring(0, 8)}_${Date.now()}`;
 
         await db.collection("payments").doc(orderId).set({
